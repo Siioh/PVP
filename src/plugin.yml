@@ -1,0 +1,10 @@
+name: PVP
+main: com.gmail.ramsarrantyler.PVP
+version: 1.0
+
+commands:
+   kit:
+      description: Brings you to the kit selection screen.
+      usage: /<command>
+      permission: PVP.kit
+      permission-message: You don’t have the required permission.
