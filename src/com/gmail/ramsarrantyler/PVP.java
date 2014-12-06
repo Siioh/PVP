@@ -1,26 +1,47 @@
 package com.gmail.ramsarrantyler; //plugin.getServer().shutdown();
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.Random;
+
+import javax.swing.Timer;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Effect;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class PVP extends JavaPlugin {
-
+	final Random generator = new Random();
+	int game_time = 60;
+	int game_time_refresh = game_time;
+	boolean game_start = false;
+	
 	@Override
 	public void onEnable(){ //Upon enable of the plugin, do something.
 	       getLogger().info("The great PVP plugin has be successfully loaded."); //Code goes here.
@@ -32,13 +53,70 @@ public final class PVP extends JavaPlugin {
 	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "gamerule commandBlockOutput false");
 	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "gamerule keepInventory true");
 	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "gamerule doMobLoot false");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "gamerule mobGriefing false");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams add blue");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams add red");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option red friendlyfire false");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option blue friendlyfire false");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option red seefriendlyinvisibles true");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option blue seefriendlyinvisibles true");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option blue color aqua");
+	       Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams option red color red");
+	       getCommand("kit").setExecutor(new PVPCommandExecutor(this));
+	       getCommand("join").setExecutor(new PVPCommandExecutor(this));
+	       int delay = 15000; //15 seconds
+	       ActionListener taskPerformer = new ActionListener() {
+	           public void actionPerformed(ActionEvent evt) {
+	        	   if(game_time >= 0){
+	        		   if(game_time != 0){
+	        			   Bukkit.broadcastMessage("The game will begin in " + game_time + " seconds.");
+	        		   }
+	        		   game_time = game_time-15;
+	        		   if(game_time == -15){
+	        			   if(Bukkit.getOnlinePlayers().length >= 2){
+	        				   Bukkit.broadcastMessage("The game will now begin!");
+	        				   game_start = true;
+	        				   for(Player players : Bukkit.getServer().getOnlinePlayers())
+	        				   {
+	        				       if(players.hasPermission("PVP.blue")){
+	        				    	   Location blue_spawn = new Location(players.getWorld(), 2.5, 151, 104, 181, 7);
+	        				    	   players.teleport(blue_spawn);
+	        				       }
+	        				       if(players.hasPermission("PVP.red")){
+	        				    	   Location red_spawn = new Location(players.getWorld(), 2.5, 151, -102.5, -2, 0);
+	        				    	   players.teleport(red_spawn);
+	        				       }
+	        				   }
+	        			   } else {
+		            		   Bukkit.broadcastMessage("Not enough players, count restarting.");
+		            		   game_time = game_time_refresh;
+	        			   }
+	        		   }
+	        	   }
+	           }
+	       };
+	       new Timer(delay, taskPerformer).start();	       
 	}
 	
+	public class PVPCommandExecutor implements CommandExecutor {
+		public PVP plugin;
+		 
+		public PVPCommandExecutor(PVP plugin) {
+			this.plugin = plugin;
+		}
+	@Override
 	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-		if(cmd.getName().equalsIgnoreCase("kit")) {
+		if(cmd.getName().equalsIgnoreCase("kit")){
 			if(sender instanceof Player) {
 				Player player = (Player) sender;
 				if(args.length == 0) {
+					PlayerInventory inventory = player.getInventory();
+					inventory.clear();
+					inventory.setHelmet(null);
+					inventory.setChestplate(null);
+					inventory.setLeggings(null);
+					inventory.setBoots(null);
+					player.setExp(0);
 					player.openInventory(kit);
 				}
 			}
@@ -47,7 +125,48 @@ public final class PVP extends JavaPlugin {
 			}
 			return true;
 		}
+		if(cmd.getName().equalsIgnoreCase("join")){
+			if(sender instanceof Player){
+				Player player = (Player) sender;
+				Random generator = new Random();
+				String name = player.getName();
+				int random = generator.nextInt(2) + 1;
+				if(random == 1){
+					Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams join blue " + name);
+					PermissionAttachment attachment = player.addAttachment(plugin);
+					attachment.setPermission("PVP.blue", true);
+					if(player.hasPermission("PVP.red")){
+						attachment.setPermission("PVP.red", false);
+					}
+					player.sendMessage(ChatColor.AQUA + "You've joined the BLUE team!");
+					if(game_start == true){
+						Location blue_spawn = new Location(player.getWorld(), 2.5, 151, 104, 181, 7);
+				    	player.teleport(blue_spawn);
+					}
+					return true;
+				}
+				if(random == 2){
+					Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams join red " + name);
+					PermissionAttachment attachment = player.addAttachment(plugin);
+					attachment.setPermission("PVP.red", true);
+					if(player.hasPermission("PVP.blue")){
+						attachment.setPermission("PVP.blue", false);
+					}
+					player.sendMessage(ChatColor.RED + "You've joined the RED team!");
+					if(game_start == true){
+						Location red_spawn = new Location(player.getWorld(), 2.5, 151, -102.5, -2, 0);
+						player.teleport(red_spawn);
+					}
+					return true;
+				}
+			}
+			if(!(sender instanceof Player)){
+				sender.sendMessage("You must be a player in order to join a team");
+				return true;
+			}
+		}
 		return false;
+	}
 	}
 	
 	public static Inventory kit = Bukkit.createInventory(null, 9, "Kit");
@@ -117,6 +236,14 @@ public final class PVP extends JavaPlugin {
 		}
 		
 		@EventHandler
+		public void onHit(EntityDamageByEntityEvent evt){
+			Entity entity = evt.getEntity();
+			Location loc = entity.getLocation();
+			World world = entity.getWorld();
+			world.playEffect(loc, Effect.STEP_SOUND, 55);
+		}
+		
+		@EventHandler
 		public void onLogin(final PlayerJoinEvent evt) {
 			plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable() {
 				 
@@ -124,18 +251,34 @@ public final class PVP extends JavaPlugin {
 		        public void run() {
 		            Player player = evt.getPlayer();
 					PlayerInventory inventory = player.getInventory();
+					Location player_loc = player.getLocation();
+					Location spawn = player_loc;
+					spawn.setX(4.5);
+					spawn.setY(101.5);
+					spawn.setZ(1.5);
 					inventory.clear();
 					inventory.setHelmet(null);
 					inventory.setChestplate(null);
 					inventory.setLeggings(null);
 					inventory.setBoots(null);
 					player.setExp(0);
-					evt.getPlayer().openInventory(kit);
+					player.teleport(spawn);
+					if(player.isOp()){
+						PermissionAttachment attachment = player.addAttachment(plugin);
+						attachment.setPermission("PVP.blue", false);
+						attachment.setPermission("PVP.red", false);
+						attachment.setPermission("PVP.nofall", false);
+					}
 		        }
 		        
 		    }, 10L);
 		}
 		
+		@EventHandler
+		public void onFoodLevelChangeEvent(FoodLevelChangeEvent evt){
+	        evt.setCancelled(true);
+	    }
+	
 		@EventHandler
         public void onInventoryClick(InventoryClickEvent evt) {
 			Player player = (Player) evt.getWhoClicked();
@@ -166,8 +309,23 @@ public final class PVP extends JavaPlugin {
         }
 		
 		@EventHandler
-		public void onRespawn(final PlayerRespawnEvent evt) {
+		public void onPlayerLeave(PlayerQuitEvent evt){
 			Player player = evt.getPlayer();
+			PermissionAttachment attachment = player.addAttachment(plugin);
+			String name = player.getName();
+			if(player.hasPermission("PVP.blue")){
+				Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams leave " + name);
+				attachment.setPermission("PVP.blue", false);
+			}
+			if(player.hasPermission("PVP.red")){
+				Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "scoreboard teams leave " + name);
+				attachment.setPermission("PVP.red", false);
+			}
+		}
+		
+		@EventHandler
+		public void onRespawn(final PlayerRespawnEvent evt) {
+			final Player player = evt.getPlayer();
 			PlayerInventory inventory = player.getInventory();
 			inventory.clear();
 			inventory.setHelmet(null);
@@ -179,11 +337,33 @@ public final class PVP extends JavaPlugin {
 				 
 		        @Override
 		        public void run() {
+		        	if(player.hasPermission("PVP.blue")){
+		        		Location blue_spawn = new Location(player.getWorld(), 2.5, 151, 104, 181, 7);
+				    	player.teleport(blue_spawn);
+					}
+					if(player.hasPermission("PVP.red")){
+						Location red_spawn = new Location(player.getWorld(), 2.5, 151, -102.5, -2, 0);
+						player.teleport(red_spawn);
+					}
 		            evt.getPlayer().openInventory(kit);
 		        }
 		        
-		}, 10L);
-	}
+			}, 10L);
+			
+		}
+		
+		@EventHandler
+		public void EntityDamageFall(EntityDamageEvent evt) {
+			DamageCause cause = evt.getCause();
+			if(cause == DamageCause.FALL) {
+				if(evt.getEntity() instanceof Player) {
+					Player player = (Player) evt.getEntity();
+					if(player.hasPermission("PVP.nofall")) {
+						evt.setCancelled(true);
+					}
+				}
+			}
+		}
 	}
 	
 	@Override
